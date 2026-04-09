@@ -36,7 +36,10 @@ from main import fetch_articles, send_webhook, load_state, save_state
 # ---------------------------------------------------------------------------
 
 FORUM_WEBHOOK_URL = os.getenv("FORUM_WEBHOOK_URL", "")
-FORUM_TAGS = json.loads(os.getenv("FORUM_TAGS", "{}"))
+try:
+    FORUM_TAGS = json.loads(os.getenv("FORUM_TAGS", "{}"))
+except json.JSONDecodeError:
+    FORUM_TAGS = {}
 POLL_MINUTES = int(os.getenv("PATCH_NOTES_POLL_MINUTES", "30"))
 
 COLOR_BLUE = 0x4488FF
