@@ -1,0 +1,45 @@
+name: Session Recap
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # every 10 minutes
+  workflow_dispatch:
+
+concurrency:
+  group: session-state
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  session-recap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check session
+        env:
+          SESSION_RECAP_WEBHOOK_URL: ${{ secrets.SESSION_RECAP_WEBHOOK_URL }}
+          TEAM_PUUIDS: ${{ secrets.TEAM_PUUIDS }}
+          HENRIK_API_KEY: ${{ secrets.HENRIK_API_KEY }}
+          HENRIK_API_REGION: ${{ secrets.HENRIK_API_REGION }}
+        run: python session_recap.py --once
+
+      - name: Commit updated state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add session_state.json
+          git diff --cached --quiet || git commit -m "Update session_state.json"
+          git push

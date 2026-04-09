@@ -1,0 +1,47 @@
+{
+  "processed_match_ids": [
+    "4cc2a094-8a85-4135-a971-0f0c99ca407e",
+    "8dc169c9-996e-49d7-9793-630ea77a3cd6",
+    "1588c097-71fb-4ea6-b267-f4b6e40d7017",
+    "fff3bc9c-1855-4353-b408-fda056066b52",
+    "aa4fff79-553f-4f9f-be11-ea5f45ab3005",
+    "de9abaa4-9d97-4280-9722-44c61a03ff7c",
+    "de09598c-3032-45ea-91b2-deec819fb07a",
+    "79a2512b-ca19-4ee8-ac6c-65ef4a29db0c",
+    "459de7ec-cc8f-45ee-9fe9-4c226e362605",
+    "e44d2883-4872-4314-84e0-14263dc92ac4",
+    "5741e3bb-74ac-4759-8a0f-b1198cebaf46",
+    "595cffd4-8573-486c-92b3-9b1461d044e4",
+    "58510d3f-b983-4d6c-8458-b016ead39544",
+    "d6f6f01d-806b-42be-a175-e9723408951c",
+    "a7cabba2-d279-44a3-9b93-c8542ec8b9d6",
+    "1da77ff7-2444-447e-8732-07595ce7b18c",
+    "39316bdf-f0a7-4afd-b429-f3971dee5862",
+    "8065b97a-6e29-47e3-bc51-911cfdd1300f",
+    "6397ab05-87ea-4433-8b1c-0ce4bd504975",
+    "e816afbf-5732-4f9b-9834-73d0721c5052",
+    "e834cfdf-c8fa-4b5d-9d52-29b8b3d2ac03",
+    "08d25944-40f7-47ed-9f5f-081ed202b57c"
+  ],
+  "active_session": {
+    "match_stats": {
+      "ed035907-14b3-4faa-983e-78afefd082f5": {
+        "349e25e2-b85a-5a83-94b8-19d2a8887d0b": {
+          "match_id": "ed035907-14b3-4faa-983e-78afefd082f5",
+          "name": "L\u00ednh V\u0129nh Ph\u00fac",
+          "tag": "e834",
+          "agent": "Sova",
+          "acs": 225.2,
+          "hs_pct": 36.7,
+          "kda": 2.83,
+          "kills": 13,
+          "deaths": 6,
+          "assists": 4,
+          "won": true
+        }
+      }
+    },
+    "last_activity_time": "2026-04-09T08:08:20+00:00"
+  },
+  "initialized": true
+}

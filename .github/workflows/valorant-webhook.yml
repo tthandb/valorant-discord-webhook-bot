@@ -40,7 +40,7 @@ jobs:
 
       - name: Check patch notes
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PATCH_NOTES_WEBHOOK_URL: ${{ secrets.PATCH_NOTES_WEBHOOK_URL }}
         run: python main.py --once --articles
 
       - name: Commit updated state
@@ -69,7 +69,7 @@ jobs:
 
       - name: Check daily shop
         env:
-          SHOP_WEBHOOK_URL: ${{ secrets.SHOP_WEBHOOK_URL }}
+          DAILY_SHOP_WEBHOOK_URL: ${{ secrets.DAILY_SHOP_WEBHOOK_URL }}
           RIOT_ACCOUNTS: ${{ secrets.RIOT_ACCOUNTS }}
         run: python main.py --once --shop
 

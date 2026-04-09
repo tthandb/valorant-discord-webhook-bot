@@ -20,8 +20,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
-POLL_MINUTES = int(os.getenv("POLL_MINUTES", "30"))
+WEBHOOK_URL = os.getenv("PATCH_NOTES_WEBHOOK_URL", "")
+PATCH_NOTES_POLL_MINUTES = int(os.getenv("PATCH_NOTES_POLL_MINUTES", "30"))
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
 
 RSS_URL = "https://gameriv.com/valorant/feed/"
@@ -29,7 +29,7 @@ COLOR_BLUE = 0x4488FF
 COLOR_PURPLE = 0x9B59B6
 
 # Daily shop config (optional — feature disabled if not set)
-SHOP_WEBHOOK_URL = os.getenv("SHOP_WEBHOOK_URL", "")
+DAILY_SHOP_WEBHOOK_URL = os.getenv("DAILY_SHOP_WEBHOOK_URL", "")
 ACCOUNTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "riot_accounts.json")
 
 
@@ -60,7 +60,7 @@ def load_accounts():
             accounts = [{
                 "ssid_cookie": ssid,
                 "region": os.getenv("RIOT_REGION", "ap"),
-                "name": os.getenv("RIOT_ACCOUNT_NAME", ""),
+                "name": os.getenv("RIOT_DISPLAY_NAME", ""),
             }]
 
     return accounts
@@ -356,7 +356,7 @@ def check_articles():
 # ---------------------------------------------------------------------------
 
 def check_daily_shop():
-    if not SHOP_WEBHOOK_URL:
+    if not DAILY_SHOP_WEBHOOK_URL:
         return
 
     accounts = load_accounts()
@@ -398,7 +398,7 @@ def check_daily_shop():
         skins = [fetch_skin_info(uuid) for uuid in shop_data["skin_uuids"]]
         embeds = build_shop_embeds(account_name, skins, shop_data)
 
-        if send_webhook(embeds, webhook_url=SHOP_WEBHOOK_URL):
+        if send_webhook(embeds, webhook_url=DAILY_SHOP_WEBHOOK_URL):
             shop_state[account_key] = today
             posted_any = True
             log.info("Daily shop posted for %s (%d skins).", account_name, len(skins))
@@ -423,7 +423,7 @@ def main():
     if once:
         if only_articles:
             if not WEBHOOK_URL:
-                raise SystemExit("Error: DISCORD_WEBHOOK_URL not set.")
+                raise SystemExit("Error: PATCH_NOTES_WEBHOOK_URL not set.")
             log.info("Running article check...")
             check_articles()
         elif only_shop:
@@ -432,22 +432,22 @@ def main():
         else:
             # Default: run both
             if not WEBHOOK_URL:
-                raise SystemExit("Error: DISCORD_WEBHOOK_URL not set.")
+                raise SystemExit("Error: PATCH_NOTES_WEBHOOK_URL not set.")
             log.info("Running all checks...")
             check_articles()
             check_daily_shop()
         log.info("Done.")
     else:
         if not WEBHOOK_URL:
-            raise SystemExit("Error: DISCORD_WEBHOOK_URL not set. Copy .env.example to .env and configure it.")
+            raise SystemExit("Error: PATCH_NOTES_WEBHOOK_URL not set. Copy .env.example to .env and configure it.")
 
         log.info("Valorant Bot starting...")
-        log.info("Poll interval: %dm", POLL_MINUTES)
+        log.info("Poll interval: %dm", PATCH_NOTES_POLL_MINUTES)
 
         check_articles()
         check_daily_shop()
 
-        schedule.every(POLL_MINUTES).minutes.do(check_articles)
+        schedule.every(PATCH_NOTES_POLL_MINUTES).minutes.do(check_articles)
         schedule.every().day.at("00:00").do(check_daily_shop)  # 00:00 UTC = 07:00 GMT+7
 
         log.info("Bot running. Press Ctrl+C to stop.")
