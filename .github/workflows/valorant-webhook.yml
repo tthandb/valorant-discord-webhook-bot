@@ -1,5 +1,8 @@
 name: Valorant Webhook Bot
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [main]
@@ -31,7 +34,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: state.json
-          key: bot-state-v1
+          key: bot-state-${{ github.run_id }}
+          restore-keys: bot-state-
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -52,7 +56,7 @@ jobs:
         if: always()
         with:
           path: state.json
-          key: bot-state-v1
+          key: bot-state-${{ github.run_id }}
 
   daily-shop:
     if: github.event.schedule == '0 0 * * *' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.task != 'forum')
@@ -66,7 +70,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: state.json
-          key: bot-state-v1
+          key: bot-state-${{ github.run_id }}
+          restore-keys: bot-state-
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -87,4 +92,4 @@ jobs:
         if: always()
         with:
           path: state.json
-          key: bot-state-v1
+          key: bot-state-${{ github.run_id }}
