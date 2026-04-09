@@ -50,6 +50,10 @@ jobs:
           FORUM_TAGS: ${{ secrets.FORUM_TAGS }}
         run: python forum_post.py --once
 
+      - name: Ensure state file exists
+        if: always()
+        run: test -f state.json || echo '{}' > state.json
+
       - name: Save bot state cache
         uses: actions/cache/save@v5
         if: always()
@@ -87,6 +91,10 @@ jobs:
           DAILY_SHOP_WEBHOOK_URL: ${{ secrets.DAILY_SHOP_WEBHOOK_URL }}
           RIOT_ACCOUNTS: ${{ secrets.RIOT_ACCOUNTS }}
         run: python main.py --once --shop
+
+      - name: Ensure state file exists
+        if: always()
+        run: test -f state.json || echo '{}' > state.json
 
       - name: Save bot state cache
         uses: actions/cache/save@v5
