@@ -28,11 +28,10 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Restore bot state cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: state.json
           key: bot-state-v1
-          save-always: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -48,6 +47,13 @@ jobs:
           FORUM_TAGS: ${{ secrets.FORUM_TAGS }}
         run: python forum_post.py --once
 
+      - name: Save bot state cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: state.json
+          key: bot-state-v1
+
   daily-shop:
     if: github.event.schedule == '0 0 * * *' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.task != 'forum')
     runs-on: ubuntu-latest
@@ -57,11 +63,10 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Restore bot state cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: state.json
           key: bot-state-v1
-          save-always: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -76,3 +81,10 @@ jobs:
           DAILY_SHOP_WEBHOOK_URL: ${{ secrets.DAILY_SHOP_WEBHOOK_URL }}
           RIOT_ACCOUNTS: ${{ secrets.RIOT_ACCOUNTS }}
         run: python main.py --once --shop
+
+      - name: Save bot state cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: state.json
+          key: bot-state-v1
