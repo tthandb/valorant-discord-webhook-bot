@@ -6,7 +6,6 @@ import logging
 import requests
 import schedule
 import xml.etree.ElementTree as ET
-from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
@@ -20,13 +19,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-WEBHOOK_URL = os.getenv("PATCH_NOTES_WEBHOOK_URL", "")
-PATCH_NOTES_POLL_MINUTES = int(os.getenv("PATCH_NOTES_POLL_MINUTES", "30"))
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
-
 RSS_URL = "https://gameriv.com/valorant/feed/"
-COLOR_BLUE = 0x4488FF
-COLOR_PURPLE = 0x9B59B6
 
 # Daily shop config (optional — feature disabled if not set)
 DAILY_SHOP_WEBHOOK_URL = os.getenv("DAILY_SHOP_WEBHOOK_URL", "")
@@ -132,121 +126,22 @@ def fetch_articles():
 
 
 # ---------------------------------------------------------------------------
-# Article scraper
-# ---------------------------------------------------------------------------
-
-def scrape_article_summary(url):
-    """Scrape an article page and extract key bullet-point changes."""
-    try:
-        resp = requests.get(url, timeout=15, headers={"User-Agent": "ValorantDiscordBot/1.0"})
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        log.warning("Failed to scrape %s: %s", url, e)
-        return None
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    content = soup.find("div", class_="entry-content") or soup.find("article")
-    if not content:
-        return None
-
-    # Strategy: find the TL;DR summary list in patch notes,
-    # or collect bullet lists grouped by heading for leaks/other articles.
-
-    # 1) Look for a TL;DR summary list (Gameriv patch notes pattern):
-    #    a paragraph with "real changes" or after April Fools disclaimer,
-    #    followed by a short <ul> with concise items.
-    tldr_list = None
-    for p in content.find_all("p"):
-        text = p.get_text(strip=True).lower()
-        if "real changes" in text or "not real" in text or "april fools" in text:
-            # Find the next <ul> after this paragraph
-            ul = p.find_next_sibling("ul")
-            if ul:
-                items = [li.get_text(strip=True) for li in ul.find_all("li", recursive=False)]
-                if 2 <= len(items) <= 10:
-                    tldr_list = items
-                    break
-
-    # 2) Collect detailed changes from h3 subsections (ALL PLATFORMS, PC ONLY, etc.)
-    sections = []
-    in_full_notes = False
-    for heading in content.find_all(["h2", "h3"]):
-        text = heading.get_text(strip=True)
-        text_lower = text.lower()
-
-        # Stop at boilerplate
-        if any(s in text_lower for s in ["leave a reply", "related", "comment"]):
-            break
-
-        # Start collecting once we hit the "Full patch notes" section
-        if "full" in text_lower and "patch" in text_lower:
-            in_full_notes = True
-            continue
-
-        # For h3 subsections within the full notes, collect bullet items
-        if heading.name == "h3" and in_full_notes:
-            items = []
-            for sib in heading.find_next_siblings():
-                if sib.name in ["h2", "h3"]:
-                    break
-                if sib.name == "ul":
-                    for li in sib.find_all("li", recursive=False):
-                        t = li.get_text(strip=True)
-                        if t and len(t) > 10:
-                            items.append(t)
-            if items:
-                sections.append((text, items))
-
-    # 3) If no full notes section found, collect lists from any h2/h3
-    if not sections and not tldr_list:
-        for heading in content.find_all(["h2", "h3"]):
-            text = heading.get_text(strip=True)
-            text_lower = text.lower()
-            if any(s in text_lower for s in ["leave a reply", "related", "comment",
-                                              "final thought", "wrapping up"]):
-                break
-            items = []
-            for sib in heading.find_next_siblings():
-                if sib.name in ["h2", "h3"]:
-                    break
-                if sib.name == "ul":
-                    for li in sib.find_all("li", recursive=False):
-                        t = li.get_text(strip=True)
-                        if t and len(t) > 10:
-                            items.append(t)
-            if items:
-                sections.append((text, items))
-
-    # Build output
-    lines = []
-
-    if tldr_list:
-        lines.append("__**Summary**__")
-        for item in tldr_list:
-            lines.append(f"- {item}")
-
-    for name, items in sections:
-        lines.append(f"\n__**{name}**__")
-        for item in items[:8]:
-            lines.append(f"- {item[:150]}")
-        if len(items) > 8:
-            lines.append(f"*... +{len(items) - 8} more*")
-
-    summary = "\n".join(lines).strip()
-    return summary[:3500] if summary else None
-
-
-# ---------------------------------------------------------------------------
 # Discord webhook
 # ---------------------------------------------------------------------------
 
-def send_webhook(embeds, webhook_url=None):
-    url = webhook_url or WEBHOOK_URL
+def send_webhook(embeds, webhook_url=None, thread_name=None, applied_tags=None, content=None):
+    url = webhook_url
     if not url:
         log.error("Webhook URL not configured")
         return False
 
     payload = {"embeds": embeds}
+    if thread_name:
+        payload["thread_name"] = thread_name[:100]
+    if applied_tags:
+        payload["applied_tags"] = applied_tags
+    if content:
+        payload["content"] = content[:2000]
 
     for attempt in range(3):
         try:
@@ -267,95 +162,10 @@ def send_webhook(embeds, webhook_url=None):
 
 
 # ---------------------------------------------------------------------------
-# Embed builder
-# ---------------------------------------------------------------------------
-
-def build_embed(article):
-    """Build Discord embed from an RSS article with full scraped summary."""
-    title = article["title"]
-    link = article["link"]
-    rss_summary = article["summary"]
-    pub_date = article["pub_date"]
-    is_leak = article.get("is_leak", False)
-
-    # Scrape the full article for a detailed summary
-    detailed = scrape_article_summary(link)
-
-    if detailed:
-        description = f"{detailed}\n\n🔗 {link}"
-    elif rss_summary:
-        description = f"{rss_summary}\n\n🔗 {link}"
-    else:
-        description = f"🔗 {link}"
-
-    if is_leak:
-        icon = "🔮"
-        color = COLOR_PURPLE
-        footer = "VALORANT Leaks"
-    else:
-        icon = "📋"
-        color = COLOR_BLUE
-        footer = "VALORANT Patch Notes"
-
-    embed = {
-        "title": f"{icon} {title}"[:256],
-        "description": description[:4096],
-        "color": color,
-        "url": link,
-        "footer": {"text": footer},
-    }
-
-    if pub_date:
-        try:
-            embed["timestamp"] = parsedate_to_datetime(pub_date).isoformat()
-        except (ValueError, TypeError):
-            pass
-
-    return embed
-
-
-# ---------------------------------------------------------------------------
-# Patch notes checker
-# ---------------------------------------------------------------------------
-
-def check_articles():
-    log.info("Checking for new articles...")
-
-    articles = fetch_articles()
-    if not articles:
-        log.info("No patch notes or leaks found in RSS feed.")
-        return
-
-    state = load_state()
-    first_run = len(state["seen_article_links"]) == 0
-    posted = 0
-    max_posts = 1 if first_run else 3
-
-    for article in articles:
-        if posted >= max_posts:
-            break
-
-        link = article["link"]
-        if link in state["seen_article_links"]:
-            continue
-
-        embed = build_embed(article)
-        if send_webhook([embed]):
-            state["seen_article_links"].append(link)
-            posted += 1
-            tag = "leak" if article.get("is_leak") else "patch"
-            log.info("Posted [%s]: %s", tag, article["title"])
-
-    state["seen_article_links"] = state["seen_article_links"][-100:]
-    save_state(state)
-    log.info("Check complete. Posted %d new articles.", posted)
-
-
-# ---------------------------------------------------------------------------
 # Daily shop checker
 # ---------------------------------------------------------------------------
 
-def check_daily_shop():
+def check_daily_shop(force=False):
     if not DAILY_SHOP_WEBHOOK_URL:
         return
 
@@ -377,7 +187,7 @@ def check_daily_shop():
         override_name = account.get("name", "")
         account_key = f"account_{i}"
 
-        if shop_state.get(account_key) == today:
+        if not force and shop_state.get(account_key) == today:
             continue
 
         log.info("Checking daily shop for account %d...", i + 1)
@@ -399,13 +209,14 @@ def check_daily_shop():
         embeds = build_shop_embeds(account_name, skins, shop_data)
 
         if send_webhook(embeds, webhook_url=DAILY_SHOP_WEBHOOK_URL):
-            shop_state[account_key] = today
+            if not force:
+                shop_state[account_key] = today
             posted_any = True
             log.info("Daily shop posted for %s (%d skins).", account_name, len(skins))
         else:
             log.error("Failed to send daily shop webhook for %s.", account_name)
 
-    if posted_any:
+    if posted_any and not force:
         state["shop_posted"] = shop_state
         save_state(state)
 
@@ -417,39 +228,22 @@ def check_daily_shop():
 def main():
     args = sys.argv[1:]
     once = "--once" in args
-    only_articles = "--articles" in args
-    only_shop = "--shop" in args
+    now = "--now" in args
+
+    if now:
+        log.info("Running in --now mode (force post, no state changes)...")
+        check_daily_shop(force=True)
+        log.info("Done.")
+        return
 
     if once:
-        if only_articles:
-            if not WEBHOOK_URL:
-                raise SystemExit("Error: PATCH_NOTES_WEBHOOK_URL not set.")
-            log.info("Running article check...")
-            check_articles()
-        elif only_shop:
-            log.info("Running daily shop check...")
-            check_daily_shop()
-        else:
-            # Default: run both
-            if not WEBHOOK_URL:
-                raise SystemExit("Error: PATCH_NOTES_WEBHOOK_URL not set.")
-            log.info("Running all checks...")
-            check_articles()
-            check_daily_shop()
+        log.info("Running daily shop check...")
+        check_daily_shop()
         log.info("Done.")
     else:
-        if not WEBHOOK_URL:
-            raise SystemExit("Error: PATCH_NOTES_WEBHOOK_URL not set. Copy .env.example to .env and configure it.")
-
         log.info("Valorant Bot starting...")
-        log.info("Poll interval: %dm", PATCH_NOTES_POLL_MINUTES)
-
-        check_articles()
         check_daily_shop()
-
-        schedule.every(PATCH_NOTES_POLL_MINUTES).minutes.do(check_articles)
         schedule.every().day.at("00:00").do(check_daily_shop)  # 00:00 UTC = 07:00 GMT+7
-
         log.info("Bot running. Press Ctrl+C to stop.")
         try:
             while True:

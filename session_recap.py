@@ -17,6 +17,8 @@ import time
 import logging
 from datetime import datetime, timezone, timedelta
 
+TZ_DISPLAY = timezone(timedelta(hours=7))  # GMT+7 for display
+
 import httpx
 import schedule
 from dotenv import load_dotenv
@@ -81,7 +83,7 @@ def fetch_recent_matches(puuid, api_key, region="ap", size=10):
     """
     url = MATCH_HISTORY_URL.format(region=region, puuid=puuid)
     headers = {"Authorization": api_key}
-    params = {"size": size}
+    params = {"size": size, "mode": "competitive"}
 
     try:
         with httpx.Client(timeout=15) as client:
@@ -192,6 +194,7 @@ def extract_player_stats(match, puuid):
     return {
         "match_id": match["metadata"]["matchid"],
         "map": match["metadata"].get("map", "Unknown"),
+        "game_start": match["metadata"].get("game_start", 0),
         "name": player.get("name", "Unknown"),
         "tag": player.get("tag", ""),
         "agent": player.get("character", ""),
@@ -230,6 +233,11 @@ def detect_session_end(session_state, new_matches_by_puuid, now=None):
 
     for puuid, matches in new_matches_by_puuid.items():
         for match in matches:
+            # Only include ranked (competitive) matches
+            mode = match.get("metadata", {}).get("mode", "").lower()
+            if mode != "competitive":
+                continue
+
             mid = match["metadata"]["matchid"]
             end_time = get_match_end_time(match)
 
@@ -290,6 +298,7 @@ def compute_session_data(active_session):
             "won": first_player.get("won", False),
             "rounds_won": first_player.get("rounds_won", 0),
             "rounds_lost": first_player.get("rounds_lost", 0),
+            "game_start": first_player.get("game_start", 0),
             "players": [],
         }
 
@@ -301,9 +310,8 @@ def compute_session_data(active_session):
 
         matches.append(match_info)
 
-    # Sort matches: most recent first (by rounds_won+lost as proxy, or just order)
-    # Keep insertion order — usually newest last from API, reverse for display
-    matches.reverse()
+    # Sort matches: latest first
+    matches.sort(key=lambda m: m["game_start"], reverse=True)
 
     # Build per-player averages
     player_stats = {}
@@ -352,32 +360,7 @@ def compute_session_data(active_session):
 # ---------------------------------------------------------------------------
 
 VALORANT_ICON = "https://media.valorant-api.com/gamemodes/96bd3920-4f36-d026-2b28-c683eb0bcac5/displayicon.png"
-RANK_TIER_UUID = "03621f52-342b-cf4e-4f86-9350a49c6d04"
 
-AGENT_EMOJI = {
-    # Duelists
-    "Jett": "\U0001f4a8", "Reyna": "\U0001f440", "Raze": "\U0001f4a3",
-    "Phoenix": "\U0001f525", "Yoru": "\U0001f300", "Neon": "\u26a1",
-    "Iso": "\U0001f52e", "Clove": "\U0001f340", "Waylay": "\U0001f5e1\ufe0f",
-    # Sentinels
-    "Sage": "\U0001f49a", "Cypher": "\U0001f4f7", "Killjoy": "\U0001f527",
-    "Chamber": "\U0001f52b", "Deadlock": "\u26d3\ufe0f", "Vyse": "\U0001f9f2",
-    # Controllers
-    "Omen": "\U0001f47b", "Brimstone": "\u2601\ufe0f", "Astra": "\u2b50",
-    "Viper": "\u2620\ufe0f", "Harbor": "\U0001f30a",
-    # Initiators
-    "Sova": "\U0001f3f9", "Breach": "\U0001f4aa", "Skye": "\U0001f985",
-    "KAY/O": "\U0001f916", "Fade": "\U0001f631", "Gekko": "\U0001f98e",
-    "Tejo": "\U0001f4a5",
-}
-
-
-def _rank_icon_url(tier_id):
-    """Return the rank icon URL for a given competitive tier ID."""
-    if not tier_id:
-        return ""
-    return (f"https://media.valorant-api.com/competitivetiers/"
-            f"{RANK_TIER_UUID}/{tier_id}/largeicon.png")
 
 
 def _win_bar(wins, losses, length=10):
@@ -409,61 +392,53 @@ def build_session_embed(matches, averages, mmr_data=None):
 
     sorted_avg = sorted(averages.items(), key=lambda x: x[1]["avg_acs"], reverse=True)
 
-    total_matches = len(matches)
-    total_wins = sum(1 for m in matches if m["won"])
-    total_losses = total_matches - total_wins
-    win_pct = round((total_wins / max(total_matches, 1)) * 100)
-
-    # Thumbnail: MVP's rank icon (fall back to agent icon)
-    mvp_puuid = sorted_avg[0][0] if sorted_avg else None
-    mvp_mmr = mmr_data.get(mvp_puuid, {})
-    thumbnail_url = _rank_icon_url(mvp_mmr.get("rank_tier"))
-    if not thumbnail_url and sorted_avg:
-        thumbnail_url = sorted_avg[0][1].get("agent_icon", "")
-
     # --- Build description ---
     sections = []
 
-    # Session overview + rank (rank sits next to the thumbnail icon)
-    bar = _win_bar(total_wins, total_losses)
-    overview = (
-        f"**{total_matches}** match{'es' if total_matches != 1 else ''} played  "
-        f"\u2022  **{total_wins}**W **{total_losses}**L\n"
-        f"`{bar}` {win_pct}% win rate"
-    )
+    # Per-player session overview with rank
+    for puuid, s in sorted_avg:
+        n = s["matches_played"]
+        wins = s["wins"]
+        losses = s["losses"]
+        win_pct = round((wins / max(n, 1)) * 100)
+        bar = _win_bar(wins, losses)
 
-    if mmr_data:
-        rank_lines = []
-        for puuid, s in sorted_avg:
-            mmr = mmr_data.get(puuid)
-            if mmr:
-                rr_str = _rr_arrow(mmr["rr_change"])
-                rank_lines.append(
-                    f"> **{s['name']}** \u2014 "
-                    f"{mmr['rank_name']} \u2022 "
-                    f"**{mmr['rr']}** RR ({rr_str})"
-                )
-        if rank_lines:
-            overview += "\n\n" + "\n".join(rank_lines)
+        mmr = mmr_data.get(puuid, {})
+        rank_str = ""
+        if mmr:
+            rr_str = _rr_arrow(mmr["rr_change"])
+            rank_str = f" \u2022 {mmr['rank_name']} \u2022 **{mmr['rr']}** RR ({rr_str})"
 
-    sections.append(overview)
+        sections.append(
+            f"**{s['name']}**{rank_str}\n"
+            f"> **{n}** game{'s' if n != 1 else ''}  \u2022  "
+            f"**{wins}**W **{losses}**L\n"
+            f"> `{bar}` {win_pct}%"
+        )
 
     # Per-match breakdowns
     for match in matches:
         result_emoji = "\u2705" if match["won"] else "\u274c"
         result_text = "WIN" if match["won"] else "LOSS"
         score = f"{match['rounds_won']}\u2013{match['rounds_lost']}"
+        game_ts = match.get("game_start", 0)
+        if game_ts:
+            match_time = datetime.fromtimestamp(game_ts, tz=TZ_DISPLAY)
+            time_str = f" \u2022 {match_time.strftime('%d/%m %H:%M')}"
+        else:
+            time_str = ""
 
         match_lines = [
-            f"\n{result_emoji} **{match['map']}** \u2014 {result_text} ({score})"
+            f"\n{result_emoji} **{match['map']}** \u2014 {result_text} ({score}){time_str}"
         ]
 
-        for p in match["players"]:
+        for i, p in enumerate(match["players"]):
             agent = p.get("agent", "")
-            emoji = AGENT_EMOJI.get(agent, "\U0001f3ae")
             kda_str = f"{p['kills']}/{p['deaths']}/{p['assists']}"
+            if i > 0:
+                match_lines.append("> \u200b")  # spacer between players
             match_lines.append(
-                f"> {emoji} **{p['name']}** \u2022 {agent}\n"
+                f"> **{p['name']}** \u2022 {agent}\n"
                 f"> `ACS` **{p['acs']}** \u2502 "
                 f"`HS%` **{p['hs_pct']}%** \u2502 "
                 f"`K/D/A` **{kda_str}**"
@@ -472,11 +447,13 @@ def build_session_embed(matches, averages, mmr_data=None):
         sections.append("\n".join(match_lines))
 
     # Session averages (only if multiple matches)
-    if total_matches > 1:
+    if len(matches) > 1:
         avg_section = ["\n\u2500\u2500\u2500 **SESSION AVERAGES** \u2500\u2500\u2500"]
         for j, (puuid, s) in enumerate(sorted_avg):
             badge = "\U0001f451" if j == 0 and len(sorted_avg) > 1 else "\u2003"
             kda_str = f"{s['total_kills']}/{s['total_deaths']}/{s['total_assists']}"
+            if j > 0:
+                avg_section.append("\u200b")  # spacer between players
             avg_section.append(
                 f"{badge} **{s['name']}**\n"
                 f"> `ACS` **{s['avg_acs']}** \u2502 "
@@ -487,26 +464,41 @@ def build_session_embed(matches, averages, mmr_data=None):
 
     description = "\n".join(sections)
 
-    # Discord description max is 4096 chars
+    # Discord description max is 4096 chars — drop oldest matches until it fits
+    while len(description) > 4096 and len(sections) > 2:
+        # Remove the last match section (oldest match, before averages)
+        # sections layout: [overview, match1, match2, ..., matchN, averages?]
+        has_averages = sections[-1].startswith("\n\u2500")
+        remove_idx = -2 if has_averages else -1
+        sections.pop(remove_idx)
+        description = "\n".join(sections)
+
     if len(description) > 4096:
         description = description[:4093] + "..."
 
+    # Time window from match timestamps (displayed in GMT+7)
+    timestamps = [m.get("game_start", 0) for m in matches if m.get("game_start")]
+    if timestamps:
+        earliest = datetime.fromtimestamp(min(timestamps), tz=TZ_DISPLAY)
+        latest = datetime.fromtimestamp(max(timestamps), tz=TZ_DISPLAY)
+        if earliest.date() == latest.date():
+            time_window = (f"{earliest.strftime('%d-%m-%Y')} "
+                           f"\u2022 {earliest.strftime('%H:%M')}\u2013{latest.strftime('%H:%M')}")
+        else:
+            time_window = (f"{earliest.strftime('%d-%m-%Y %H:%M')}"
+                           f" \u2013 {latest.strftime('%d-%m-%Y %H:%M')}")
+    else:
+        time_window = datetime.now(TZ_DISPLAY).strftime('%d-%m-%Y')
+
     embed = {
         "author": {
-            "name": f"Session Summary \u2022 {datetime.now(timezone.utc).strftime('%d-%m-%Y')}",
+            "name": "Session Summary",
             "icon_url": VALORANT_ICON,
         },
+        "title": time_window,
         "description": description,
-        "color": COLOR_VALORANT_RED,
-        "footer": {
-            "text": "VALORANT Session Tracker",
-            "icon_url": VALORANT_ICON,
-        },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "color": COLOR_VALORANT_RED
     }
-
-    if thumbnail_url:
-        embed["thumbnail"] = {"url": thumbnail_url}
 
     return [embed]
 
@@ -567,6 +559,11 @@ def post_recap_now():
             end_time = get_match_end_time(match)
 
             if end_time < cutoff:
+                continue
+
+            # Only include ranked (competitive) matches
+            mode = match.get("metadata", {}).get("mode", "").lower()
+            if mode != "competitive":
                 continue
 
             # Extract stats for all team members in this match
@@ -650,7 +647,9 @@ def check_session():
         matches = fetch_recent_matches(puuid, HENRIK_API_KEY, region=HENRIK_API_REGION)
         time.sleep(1)
 
-        new = [m for m in matches if m["metadata"]["matchid"] not in already_seen]
+        new = [m for m in matches
+               if m["metadata"]["matchid"] not in already_seen
+               and m.get("metadata", {}).get("mode", "").lower() == "competitive"]
         if new:
             new_matches_by_puuid[puuid] = new
 
@@ -699,6 +698,18 @@ def check_session():
 def main():
     args = sys.argv[1:]
     once = "--once" in args
+    now = "--now" in args
+
+    if now:
+        # Force-post immediately — for local testing
+        if not SESSION_RECAP_WEBHOOK_URL or not TEAM_PUUIDS or not HENRIK_API_KEY:
+            raise SystemExit(
+                "Error: SESSION_RECAP_WEBHOOK_URL, TEAM_PUUIDS, and HENRIK_API_KEY must be set."
+            )
+        log.info("Running in --now mode (immediate recap, no state changes)...")
+        post_recap_now()
+        log.info("Done.")
+        return
 
     if once:
         log.info("Running session check (single run)...")

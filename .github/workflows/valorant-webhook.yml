@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "*/30 * * * *"    # patch notes every 30 min
+    - cron: "*/30 * * * *"    # forum posts every 30 min
     - cron: "0 0 * * *"       # daily shop at 00:00 UTC (07:00 GMT+7)
   workflow_dispatch:
     inputs:
@@ -15,20 +15,24 @@ on:
         type: choice
         options:
           - all
-          - articles
+          - forum
           - shop
 
-permissions:
-  contents: write
-
 jobs:
-  patch-notes:
+  forum-posts:
     if: github.event.schedule != '0 0 * * *'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
+
+      - name: Restore bot state cache
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: bot-state-v1
+          save-always: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -38,26 +42,26 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check patch notes
+      - name: Check forum posts
         env:
-          PATCH_NOTES_WEBHOOK_URL: ${{ secrets.PATCH_NOTES_WEBHOOK_URL }}
-        run: python main.py --once --articles
-
-      - name: Commit updated state
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add state.json
-          git diff --cached --quiet || git commit -m "Update state.json"
-          git push
+          FORUM_WEBHOOK_URL: ${{ secrets.FORUM_WEBHOOK_URL }}
+          FORUM_TAGS: ${{ secrets.FORUM_TAGS }}
+        run: python forum_post.py --once
 
   daily-shop:
-    if: github.event.schedule == '0 0 * * *' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.task != 'articles')
+    if: github.event.schedule == '0 0 * * *' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.task != 'forum')
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
+
+      - name: Restore bot state cache
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: bot-state-v1
+          save-always: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -72,11 +76,3 @@ jobs:
           DAILY_SHOP_WEBHOOK_URL: ${{ secrets.DAILY_SHOP_WEBHOOK_URL }}
           RIOT_ACCOUNTS: ${{ secrets.RIOT_ACCOUNTS }}
         run: python main.py --once --shop
-
-      - name: Commit updated state
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add state.json
-          git diff --cached --quiet || git commit -m "Update state.json"
-          git push

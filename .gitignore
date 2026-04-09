@@ -1,7 +1,10 @@
 .env
+.env.prod
 riot_accounts.json
 __pycache__/
 *.pyc
 PLAN.md
 CLAUDE.md
 plans/
+state.json
+session_state.json
