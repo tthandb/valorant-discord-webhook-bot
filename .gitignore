@@ -1,5 +1,7 @@
 .env
+riot_accounts.json
 __pycache__/
 *.pyc
 PLAN.md
 CLAUDE.md
+plans/
