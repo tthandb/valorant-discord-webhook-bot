@@ -1,0 +1,15 @@
+app = "valorant-daily-shop"
+primary_region = "sin"
+
+[build]
+
+[env]
+  STATE_FILE = "/app/data/state.json"
+
+[mounts]
+  source = "shop_data"
+  destination = "/app/data"
+
+[vm]
+  size = "shared-cpu-1x"
+  memory = 256

@@ -31,6 +31,7 @@ All config is in `.env`. Each feature activates when its variables are set.
 | `RIOT_SSID_COOKIE` | Riot auth cookie (run `python riot_auth.py`) |
 | `RIOT_REGION` | Riot region — `ap`, `na`, `eu`, `kr` (default: `ap`) |
 | `RIOT_DISPLAY_NAME` | Display name in shop embeds |
+| `RIOT_PROXY_URL` | Proxy for Riot API requests (e.g. `socks5://host:port`) |
 | `SESSION_RECAP_WEBHOOK_URL` | Session recap webhook |
 | `TEAM_PUUIDS` | Comma-separated PUUIDs to track |
 | `HENRIK_API_KEY` | Henrik-3 API key |
@@ -52,8 +53,8 @@ All config is in `.env`. Each feature activates when its variables are set.
 Add secrets in **Settings > Secrets > Actions**, then the included workflows handle everything:
 
 - `valorant-webhook.yml` — forum posts (every 30 min)
-- `daily-shop.yml` — daily shop (00:00 UTC)
 - `session-recap.yml` — session tracking (every 10 min)
+- Daily shop runs on **Fly.io** (Singapore region) — see `fly.toml`
 
 ## Notes
 

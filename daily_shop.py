@@ -34,9 +34,10 @@ log = logging.getLogger(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
+STATE_FILE = os.getenv("STATE_FILE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json"))
 ACCOUNTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "riot_accounts.json")
 DAILY_SHOP_WEBHOOK_URL = os.getenv("DAILY_SHOP_WEBHOOK_URL", "")
+RIOT_PROXY_URL = os.getenv("RIOT_PROXY_URL", "")
 
 AUTH_URL = "https://auth.riotgames.com/api/v1/authorization"
 ENTITLEMENTS_URL = "https://entitlements.auth.riotgames.com/api/token/v1"
@@ -182,6 +183,8 @@ def riot_auth_from_cookie(ssid_cookie):
     session.headers.update({
         "User-Agent": "RiotClient/99.0.0.0 rso-auth (Windows;10;;Professional, x64)",
     })
+    if RIOT_PROXY_URL:
+        session.proxies = {"https": RIOT_PROXY_URL, "http": RIOT_PROXY_URL}
     session.cookies.set("ssid", ssid_cookie, domain="auth.riotgames.com")
 
     # Re-auth using cookie
@@ -246,7 +249,8 @@ def fetch_daily_shop(access_token, entitlements_token, puuid, region="ap"):
         "X-Riot-ClientVersion": _get_client_version(),
     }
 
-    resp = requests.post(url, headers=headers, json={}, timeout=15)
+    proxies = {"https": RIOT_PROXY_URL, "http": RIOT_PROXY_URL} if RIOT_PROXY_URL else None
+    resp = requests.post(url, headers=headers, json={}, timeout=15, proxies=proxies)
     resp.raise_for_status()
     data = resp.json()
 

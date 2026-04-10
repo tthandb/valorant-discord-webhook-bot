@@ -1,0 +1,16 @@
+.env
+.env.*
+riot_accounts.json
+state.json
+session_state.json
+.git
+.github
+.claude
+__pycache__
+*.pyc
+forum_post.py
+main.py
+session_recap.py
+riot_auth.py
+CLAUDE.md
+README.md
