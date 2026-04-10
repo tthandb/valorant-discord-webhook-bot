@@ -14,7 +14,7 @@ Posts **patch notes**, **daily shop**, and **session recaps** to Discord automat
 pip install -r requirements.txt
 cp .env.example .env   # edit with your webhook URLs
 python forum_post.py    # forum posts
-python main.py          # daily shop
+python daily_shop.py    # daily shop
 python session_recap.py # session recap
 ```
 
@@ -42,8 +42,8 @@ All config is in `.env`. Each feature activates when its variables are set.
 |---|---|
 | `python forum_post.py` | Forum posts — polls every 30 min |
 | `python forum_post.py --once` | Single forum check (CI/CD) |
-| `python main.py` | Daily shop — long-running, posts at 00:00 UTC |
-| `python main.py --once` | Single shop check (CI/CD) |
+| `python daily_shop.py` | Daily shop — long-running, posts at 00:00 UTC |
+| `python daily_shop.py --once` | Single shop check (CI/CD) |
 | `python session_recap.py` | Immediate recap + polls every 10 min |
 | `python session_recap.py --once` | Single session check (CI/CD) |
 
@@ -51,7 +51,8 @@ All config is in `.env`. Each feature activates when its variables are set.
 
 Add secrets in **Settings > Secrets > Actions**, then the included workflows handle everything:
 
-- `valorant-webhook.yml` — forum posts (every 30 min) + daily shop (00:00 UTC)
+- `valorant-webhook.yml` — forum posts (every 30 min)
+- `daily-shop.yml` — daily shop (00:00 UTC)
 - `session-recap.yml` — session tracking (every 10 min)
 
 ## Notes

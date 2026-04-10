@@ -1,14 +1,12 @@
-name: Forum Posts
+name: Daily Shop
 
 on:
-  push:
-    branches: [main]
   schedule:
-    - cron: "*/30 * * * *"    # every 30 min
+    - cron: "0 0 * * *"       # 00:00 UTC (07:00 GMT+7)
   workflow_dispatch:
 
 jobs:
-  forum-posts:
+  daily-shop:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,9 +17,9 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: state.json
-          key: bot-state-forum-${{ github.run_id }}
+          key: bot-state-shop-${{ github.run_id }}
           restore-keys: |
-            bot-state-forum-
+            bot-state-shop-
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -31,11 +29,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check forum posts
+      - name: Check daily shop
         env:
-          FORUM_WEBHOOK_URL: ${{ secrets.FORUM_WEBHOOK_URL }}
-          FORUM_TAGS: ${{ secrets.FORUM_TAGS }}
-        run: python forum_post.py --once
+          DAILY_SHOP_WEBHOOK_URL: ${{ secrets.DAILY_SHOP_WEBHOOK_URL }}
+          RIOT_ACCOUNTS: ${{ secrets.RIOT_ACCOUNTS }}
+        run: python daily_shop.py --once
 
       - name: Ensure state file exists
         if: always()
@@ -46,4 +44,4 @@ jobs:
         if: always()
         with:
           path: state.json
-          key: bot-state-forum-${{ github.run_id }}
+          key: bot-state-shop-${{ github.run_id }}
