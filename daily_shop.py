@@ -190,6 +190,7 @@ def riot_auth_from_cookie(ssid_cookie):
     data = resp.json()
 
     if data.get("type") != "response":
+        log.error("Riot auth response: %s", json.dumps(data)[:500])
         raise RuntimeError(
             "SSID cookie expired or invalid. Re-run: python riot_auth.py"
         )
