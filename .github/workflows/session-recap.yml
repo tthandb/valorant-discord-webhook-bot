@@ -4,6 +4,14 @@ on:
   schedule:
     - cron: "*/10 * * * *"  # every 10 minutes
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode: 'once' for session check, 'now' for immediate recap"
+        default: "now"
+        type: choice
+        options:
+          - now
+          - once
 
 concurrency:
   group: session-state
@@ -39,7 +47,7 @@ jobs:
           TEAM_PUUIDS: ${{ secrets.TEAM_PUUIDS }}
           HENRIK_API_KEY: ${{ secrets.HENRIK_API_KEY }}
           HENRIK_API_REGION: ${{ secrets.HENRIK_API_REGION }}
-        run: python session_recap.py --once
+        run: python session_recap.py --${{ github.event.inputs.mode || 'once' }}
 
       - name: Ensure session state file exists
         if: always()
