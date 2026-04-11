@@ -434,11 +434,17 @@ def build_session_embed(matches, averages, mmr_data=None):
 
         for i, p in enumerate(match["players"]):
             agent = p.get("agent", "")
+            rank = p.get("rank_name", "")
             kda_str = f"{p['kills']}/{p['deaths']}/{p['assists']}"
             if i > 0:
                 match_lines.append("> \u200b")  # spacer between players
+
+            name_line = f"> **{p['name']}** \u2022 {agent}"
+            if rank:
+                name_line += f" \u2022 {rank}"
+
             match_lines.append(
-                f"> **{p['name']}** \u2022 {agent}\n"
+                f"{name_line}\n"
                 f"> `ACS` **{p['acs']}** \u2502 "
                 f"`HS%` **{p['hs_pct']}%** \u2502 "
                 f"`K/D/A` **{kda_str}**"
@@ -454,8 +460,15 @@ def build_session_embed(matches, averages, mmr_data=None):
             kda_str = f"{s['total_kills']}/{s['total_deaths']}/{s['total_assists']}"
             if j > 0:
                 avg_section.append("\u200b")  # spacer between players
+
+            mmr = mmr_data.get(puuid, {})
+            rank_str = ""
+            if mmr:
+                rr_str = _rr_arrow(mmr["rr_change"])
+                rank_str = f"\n> {mmr['rank_name']} \u2022 **{mmr['rr']}** RR ({rr_str})"
+
             avg_section.append(
-                f"{badge} **{s['name']}**\n"
+                f"{badge} **{s['name']}**{rank_str}\n"
                 f"> `ACS` **{s['avg_acs']}** \u2502 "
                 f"`HS%` **{s['avg_hs_pct']}%** \u2502 "
                 f"`K/D/A` **{kda_str}**"
