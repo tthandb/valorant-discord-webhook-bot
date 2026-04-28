@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "*/30 * * * *"    # every 30 min
   workflow_dispatch:
+    inputs:
+      pop_seen:
+        description: "Pop the last N entries from seen_forum_links before running"
+        required: false
+        default: "0"
 
 jobs:
   forum-posts:
@@ -30,6 +35,27 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Pop last N entries from seen_forum_links
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.pop_seen != '0' }}
+        run: |
+          test -f state.json || echo '{}' > state.json
+          python -c "
+          import json, os
+          n = int(os.environ['POP_N'])
+          with open('state.json') as f:
+              s = json.load(f)
+          seen = s.get('seen_forum_links', [])
+          removed = seen[-n:] if n > 0 else []
+          s['seen_forum_links'] = seen[:-n] if n > 0 else seen
+          with open('state.json', 'w') as f:
+              json.dump(s, f, indent=2)
+          print(f'Removed {len(removed)} entries:')
+          for link in removed:
+              print(f'  - {link}')
+          "
+        env:
+          POP_N: ${{ inputs.pop_seen }}
 
       - name: Check forum posts
         env:
